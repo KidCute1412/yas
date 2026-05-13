@@ -30,12 +30,17 @@ cd k8s/deploy
 
 Step 4: Run these scripts in order
 
+Note: If you are on a Unix-based system, make sure the scripts have execute permissions:
+
+````bash
+chmod +x *.sh
+
 ```bash
 ./setup-cluster.sh
 ./setup-keycloak.sh
 ./setup-redis.sh
 ./deploy-yas-configuration.sh
-```
+````
 
 Step 5: Fix in-cluster DNS for identity.yas.local.com (CoreDNS static host)
 
@@ -71,4 +76,11 @@ Step 9: Deploy the API Ingress
 
 ```bash
 kubectl apply -f setup-api-ingress.yaml
+```
+
+Step 10: Deploy the internal API Gateway
+
+```bash
+
+kubectl apply -f setup-internal-api-gateway.yaml
 ```

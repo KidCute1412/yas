@@ -21,14 +21,15 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         return http
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/prometheus", "/actuator/health/**",
-                    "/swagger-ui", "/swagger-ui/**", "/error", "/v3/api-docs/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/medias/**").permitAll()
-                .requestMatchers("/medias").hasRole("ADMIN")
-                .anyRequest().authenticated())
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
-            .build();
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/prometheus", "/actuator/health/**",
+                                "/swagger-ui", "/swagger-ui/**", "/error", "/v3/api-docs/**")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/medias/**", "/media/medias/**").permitAll()
+                        .requestMatchers("/medias").hasRole("ADMIN")
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .build();
     }
 
     @Bean
@@ -37,8 +38,8 @@ public class SecurityConfig {
             Map<String, Collection<String>> realmAccess = jwt.getClaim("realm_access");
             Collection<String> roles = realmAccess.get("roles");
             return roles.stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                .collect(Collectors.toList());
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .collect(Collectors.toList());
         };
 
         var jwtAuthenticationConverter = new JwtAuthenticationConverter();

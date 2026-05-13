@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-api-gateway-config
+  namespace: yas
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location /product/ {
+        proxy_pass http://product;
+      }
+
+      location /cart/ {
+        proxy_pass http://cart;
+      }
+
+      location /customer/ {
+        proxy_pass http://customer;
+      }
+
+      location /order/ {
+        proxy_pass http://order;
+      }
+
+      location /media/ {
+        proxy_pass http://media;
+      }
+
+      location /inventory/ {
+        proxy_pass http://inventory;
+      }
+
+      location /location/ {
+        proxy_pass http://location;
+      }
+
+      location /tax/ {
+        proxy_pass http://tax;
+      }
+
+      location /promotion/ {
+        proxy_pass http://promotion;
+      }
+
+      location /rating/ {
+        proxy_pass http://rating;
+      }
+
+      location /recommendation/ {
+        proxy_pass http://recommendation;
+      }
+
+      location /search/ {
+        proxy_pass http://search;
+      }
+
+      location /payment/ {
+        proxy_pass http://payment;
+      }
+
+      location /webhook/ {
+        proxy_pass http://webhook;
+      }
+
+      location /sampledata/ {
+        proxy_pass http://sampledata;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: yas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: internal-api-gateway
+  template:
+    metadata:
+      labels:
+        app: internal-api-gateway
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: internal-api-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: yas
+spec:
+  type: ClusterIP
+  selector:
+    app: internal-api-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
