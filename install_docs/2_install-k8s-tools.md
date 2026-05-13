@@ -23,6 +23,13 @@ echo "===== Install Helm ====="
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 helm version
 
+echo "===== Install yq ====="
+sudo mkdir -p /tool
+sudo curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /tool/yq
+sudo chmod +x /tool/yq
+sudo ln -sf /tool/yq /usr/local/bin/yq
+yq --version
+
 echo "===== Kubernetes tools installed successfully ====="
 EOF
 ```
