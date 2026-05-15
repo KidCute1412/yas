@@ -1,0 +1,231 @@
+import groovy.transform.Field
+
+@Field def SERVICE_BRANCH_PARAM_MAP = [
+    cart            : 'BRANCH_CART',
+    tax             : 'BRANCH_TAX',
+    order           : 'BRANCH_ORDER',
+    product         : 'BRANCH_PRODUCT',
+    media           : 'BRANCH_MEDIA',
+    rating          : 'BRANCH_RATING',
+    customer        : 'BRANCH_CUSTOMER',
+    location        : 'BRANCH_LOCATION',
+    inventory       : 'BRANCH_INVENTORY',
+    search          : 'BRANCH_SEARCH',
+    payment         : 'BRANCH_PAYMENT',
+    promotion       : 'BRANCH_PROMOTION',
+    recommendation  : 'BRANCH_RECOMMENDATION',
+    sampledata      : 'BRANCH_SAMPLEDATA',
+    webhook         : 'BRANCH_WEBHOOK',
+    'backoffice-bff': 'BRANCH_BACKOFFICE_BFF',
+    'storefront-bff': 'BRANCH_STOREFRONT_BFF',
+    'backoffice-ui' : 'BRANCH_BACKOFFICE_UI',
+    'storefront-ui' : 'BRANCH_STOREFRONT_UI'
+]
+
+def expectedDevBranch(String serviceName) {
+    return "dev_${serviceName.replace('-', '_')}_service"
+}
+
+def getRemoteCommitShort(String repoUrl, String branchName) {
+    def commit = sh(
+        script: """
+            git ls-remote --heads '${repoUrl}' '${branchName}' | awk '{print \$1}'
+        """,
+        returnStdout: true
+    ).trim()
+
+    if (!commit) {
+        error "Cannot find branch '${branchName}' in repo ${repoUrl}"
+    }
+
+    return commit.take(7)
+}
+
+pipeline {
+    agent { label 'deploy-agent' }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+    }
+
+    parameters {
+        string(name: 'TARGET_NAMESPACE', defaultValue: 'developer-test', description: 'Kubernetes namespace for this developer test deployment')
+
+        string(name: 'BRANCH_CART', defaultValue: 'main', description: 'Branch for cart service')
+        string(name: 'BRANCH_TAX', defaultValue: 'main', description: 'Branch for tax service')
+        string(name: 'BRANCH_ORDER', defaultValue: 'main', description: 'Branch for order service')
+        string(name: 'BRANCH_PRODUCT', defaultValue: 'main', description: 'Branch for product service')
+        string(name: 'BRANCH_MEDIA', defaultValue: 'main', description: 'Branch for media service')
+        string(name: 'BRANCH_RATING', defaultValue: 'main', description: 'Branch for rating service')
+        string(name: 'BRANCH_CUSTOMER', defaultValue: 'main', description: 'Branch for customer service')
+        string(name: 'BRANCH_LOCATION', defaultValue: 'main', description: 'Branch for location service')
+        string(name: 'BRANCH_INVENTORY', defaultValue: 'main', description: 'Branch for inventory service')
+        string(name: 'BRANCH_SEARCH', defaultValue: 'main', description: 'Branch for search service')
+        string(name: 'BRANCH_PAYMENT', defaultValue: 'main', description: 'Branch for payment service')
+        string(name: 'BRANCH_PROMOTION', defaultValue: 'main', description: 'Branch for promotion service')
+        string(name: 'BRANCH_RECOMMENDATION', defaultValue: 'main', description: 'Branch for recommendation service')
+        string(name: 'BRANCH_SAMPLEDATA', defaultValue: 'main', description: 'Branch for sampledata service')
+        string(name: 'BRANCH_WEBHOOK', defaultValue: 'main', description: 'Branch for webhook service')
+        string(name: 'BRANCH_BACKOFFICE_BFF', defaultValue: 'main', description: 'Branch for backoffice-bff service')
+        string(name: 'BRANCH_STOREFRONT_BFF', defaultValue: 'main', description: 'Branch for storefront-bff service')
+        string(name: 'BRANCH_BACKOFFICE_UI', defaultValue: 'main', description: 'Branch for backoffice-ui service')
+        string(name: 'BRANCH_STOREFRONT_UI', defaultValue: 'main', description: 'Branch for storefront-ui service')
+    }
+
+    environment {
+        SOURCE_REPO_URL = 'https://github.com/KidCute1412/yas.git'
+        DOCKERHUB_NAMESPACE = 'thanhtienntt'
+
+        SSH_CREDS = 'gcp-minikube-ssh-key'
+        GCP_HOST = '104.199.151.243'
+
+        REMOTE_DEPLOY_DIR = '/workspace/yas'
+        HELM_CHART_PATH = 'k8s/charts/yas'
+        RELEASE_NAME = 'yas-developer'
+    }
+
+    stages {
+        stage('Resolve Image Tags') {
+            steps {
+                script {
+                    def imageConfig = [:]
+
+                    SERVICE_BRANCH_PARAM_MAP.each { serviceName, paramName ->
+                        def branchName = params[paramName]?.trim()
+
+                        if (!branchName) {
+                            error "Parameter ${paramName} is empty."
+                        }
+
+                        def imageTag
+
+                        if (branchName == 'main') {
+                            imageTag = 'latest'
+                        } else {
+                            def expectedBranch = expectedDevBranch(serviceName)
+
+                            if (branchName != expectedBranch) {
+                                error """
+Invalid branch '${branchName}' for service '${serviceName}'.
+
+Expected:
+  main
+or:
+  ${expectedBranch}
+
+Example:
+  tax service must use dev_tax_service
+  product service must use dev_product_service
+  storefront-bff must use dev_storefront_bff_service
+"""
+                            }
+
+                            imageTag = getRemoteCommitShort(env.SOURCE_REPO_URL, branchName)
+                        }
+
+                        imageConfig[serviceName] = [
+                            branch    : branchName,
+                            repository: "${env.DOCKERHUB_NAMESPACE}/yas-${serviceName}",
+                            tag       : imageTag
+                        ]
+                    }
+
+                    env.IMAGE_CONFIG_TEXT = imageConfig.collect { serviceName, cfg ->
+                        "${serviceName}: branch=${cfg.branch}, image=${cfg.repository}:${cfg.tag}"
+                    }.join('\n')
+
+                    def valuesYaml = "services:\n"
+
+                    imageConfig.each { serviceName, cfg ->
+                        valuesYaml += """
+  "${serviceName}":
+    image:
+      repository: "${cfg.repository}"
+      tag: "${cfg.tag}"
+"""
+                    }
+
+                    writeFile file: 'developer-values.yaml', text: valuesYaml
+
+                    echo "===== Resolved image config ====="
+                    echo env.IMAGE_CONFIG_TEXT
+
+                    echo "===== Generated developer-values.yaml ====="
+                    sh 'cat developer-values.yaml'
+                }
+            }
+        }
+
+        stage('Deploy to Minikube VM') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: "${SSH_CREDS}",
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
+                    sh """
+                        set -e
+
+                        echo "===== Copy override values to GCP VM ====="
+                        scp -i "\$SSH_KEY" \
+                            -o StrictHostKeyChecking=no \
+                            developer-values.yaml \
+                            "\$SSH_USER@${GCP_HOST}:/tmp/developer-values-${BUILD_NUMBER}.yaml"
+
+                        echo "===== Deploy with Helm on GCP Minikube VM ====="
+                        ssh -i "\$SSH_KEY" \
+                            -o StrictHostKeyChecking=no \
+                            "\$SSH_USER@${GCP_HOST}" '
+                                set -e
+
+                                cd "${REMOTE_DEPLOY_DIR}"
+
+                                echo "Current directory:"
+                                pwd
+
+                                echo "Check Kubernetes:"
+                                kubectl get nodes
+
+                                echo "Deploy namespace: ${TARGET_NAMESPACE}"
+
+                                helm upgrade --install "${RELEASE_NAME}" "${HELM_CHART_PATH}" \\
+                                  -n "${TARGET_NAMESPACE}" \\
+                                  --create-namespace \\
+                                  -f "/tmp/developer-values-${BUILD_NUMBER}.yaml"
+
+                                echo "===== Pods ====="
+                                kubectl get pods -n "${TARGET_NAMESPACE}" -o wide
+
+                                echo "===== Services ====="
+                                kubectl get svc -n "${TARGET_NAMESPACE}" -o wide
+
+                                echo "===== NodePort Services ====="
+                                kubectl get svc -n "${TARGET_NAMESPACE}" \\
+                                  -o jsonpath="{range .items[?(@.spec.type==\\"NodePort\\")]}{.metadata.name}{\\" -> NodePort: \\"}{.spec.ports[0].nodePort}{\\"\\n\\"}{end}" || true
+
+                                echo ""
+                                echo "===== Minikube IP ====="
+                                minikube ip || true
+                            '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Developer test deployment completed."
+            echo "Namespace: ${params.TARGET_NAMESPACE}"
+            echo "Check Jenkins console output for Minikube IP and NodePort."
+        }
+
+        failure {
+            echo "developer_build failed. Check branch names, image tags, SSH credential, Helm chart path, and NodePort service config."
+        }
+    }
+}
