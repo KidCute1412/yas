@@ -105,13 +105,13 @@ spec:
                 port:
                   number: 80
 
-          - path: /payment
-            pathType: Prefix
-            backend:
-              service:
-                name: payment
-                port:
-                  number: 80
+          # - path: /payment
+          #   pathType: Prefix
+          #   backend:
+          #     service:
+          #       name: payment
+          #       port:
+          #         number: 80
 
           # - path: /payment-paypal
           #   pathType: Prefix
@@ -129,13 +129,13 @@ spec:
                 port:
                   number: 80
 
-          - path: /webhook
-            pathType: Prefix
-            backend:
-              service:
-                name: webhook
-                port:
-                  number: 80
+          # - path: /webhook
+          #   pathType: Prefix
+          #   backend:
+          #     service:
+          #       name: webhook
+          #       port:
+          #         number: 80
 
           # - path: /sampledata
           #   pathType: Prefix

@@ -56,13 +56,13 @@ data:
         proxy_pass http://search;
       }
 
-      location /payment/ {
-        proxy_pass http://payment;
-      }
+      # location /payment/ {
+      #   proxy_pass http://payment;
+      # }
 
-      location /webhook/ {
-        proxy_pass http://webhook;
-      }
+      # location /webhook/ {
+      #   proxy_pass http://webhook;
+      # }
 
       location /sampledata/ {
         proxy_pass http://sampledata;
